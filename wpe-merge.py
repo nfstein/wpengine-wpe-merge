@@ -5,7 +5,8 @@ import sys
 
 # clean data, set types, remove nan account_ids, create columns needed for output
 def data_cleaner(raw_data):
-    clean_data = raw_data
+    #pick columns
+    clean_data = raw_data[["Account ID","First Name", "Created On"]]
 
     # might not necessarily want to assume the type of the Account ID, 
     # but definitely dont want .0s on the end for api query
@@ -15,18 +16,16 @@ def data_cleaner(raw_data):
     # set as datetime to check validity and match "Status Set On" data
     clean_data["Created On"] = pd.to_datetime(clean_data["Created On"], errors='coerce')
 
-    #unneccesary column
-    clean_data = clean_data.drop(["Account Name"], axis=1)
-
     # clean data, create contract account_id is unique integer not na, and one other property must be non na.
     clean_data = clean_data.dropna(axis = 0, how="any",subset=["Account ID"]) # must have Account ID
     clean_data = clean_data.dropna(axis = 0, how="all",subset=["First Name","Created On"]) # account with all empty data
     clean_data["Account ID"] = clean_data["Account ID"].astype("int", errors='ignore')
 
-    # create columns for output
+    # create columns for output, its a merge, so if there's data in the columns originally, keep it
     try:
-        clean_data["Status"]
-    except:
+        clean_data["Status"] = raw_data["Status"]
+        clean_data["Status Set On"] = raw_data["Status Set On"]
+    except KeyError:
         clean_data["Status"] = nan
         clean_data["Status Set On"] = nan
 
@@ -84,19 +83,23 @@ def query_and_merge_all(df_in):
                 df_out.loc[account_id, "Status Set On"] = pd.to_datetime(returned_dict["created_on"], errors='coerce') 
             except KeyError:
                 print(f"no created_on date included for account id - {account_id}", end="\t")
-        print("--" + str(index+1) + "/" + str(total_ids))
+        print("--" + str(index+1) + "/" + str(total_ids)) #progress
 
     return df_out
 
-input_filepath = sys.argv[0]
-output_filepath = sys.argv[1]
-#should check length too, valid path
-if input_filepath[-4:] != ".csv": input_filepath += ".csv"
-if output_filepath[-4:] != ".csv": output_filepath += ".csv"
+def main(args):
+    if len(args) != 3:
+        return print("invoke program as: wpe_merge <input_file.csv> <output_file.csv>")
+    input_filepath = sys.argv[1]
+    output_filepath = sys.argv[2]
+    if input_filepath[-4:] != ".csv" or output_filepath[-4:] != ".csv": 
+        return print("filepaths must be valid csv files")
 
-# importing with pandas assuming accurate headers and reasonable size of data
-raw_data = pd.read_csv(input_filepath)
-df = data_cleaner(raw_data)
-df = query_and_merge_all(df)
-df["Status Set On"] = pd.to_datetime(df["Status Set On"], errors='coerce') #drops seconds
-df.to_csv(output_filepath)
+    # importing with pandas assuming accurate headers and reasonable size of data
+    raw_data = pd.read_csv(input_filepath)
+    df = data_cleaner(raw_data)
+    df = query_and_merge_all(df)
+    df["Status Set On"] = pd.to_datetime(df["Status Set On"], errors='coerce') #drops seconds
+    df.to_csv(output_filepath)
+    
+main(sys.argv)
