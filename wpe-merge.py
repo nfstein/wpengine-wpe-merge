@@ -1,6 +1,7 @@
 import pandas as pd
 from numpy import nan
 import requests
+import os
 import sys
 
 # clean data, set types, remove nan account_ids, create columns needed for output
@@ -39,11 +40,11 @@ def data_cleaner(raw_data):
 def query(account_id):
     is_valid = True
     returned_dict = {}
-    request = requests.get("http://interview.wpengine.io/v1/accounts/" + str(account_id))
+    request = requests.get(f"http://interview.wpengine.io/v1/accounts/{account_id}")
     try: # check parseable response
         returned_dict = request.json()
     except ValueError:
-        print("response not json parsable for account id " + str(account_id))
+        print(f"response not json parsable for account id {account_id}")
         is_valid = False
     try: # check not error message
         print(str(account_id) + " " + returned_dict["details"])
@@ -53,7 +54,7 @@ def query(account_id):
     return is_valid, returned_dict
 
 # query for each account_id and merge is_valid  
-def query_and_merge_all(df_in):
+def query_each_and_merge(df_in):
     
     df_out = df_in
     total_ids = df_out.index.size
@@ -88,21 +89,33 @@ def query_and_merge_all(df_in):
     return df_out
 
 def main(args):
-    print("start") #TODO: remove, checking start delay
+    
+    # could break out into func
     if len(args) != 3:
         return print("ERROR - invoke program as: wpe_merge <input_file.csv> <output_file.csv>")
-    input_filepath = sys.argv[1]
-    output_filepath = sys.argv[2]
+    input_filepath = args[1]
+    output_filepath = args[2]
+    
+    if not os.path.exists(input_filepath):
+        return print(f"ERROR - input filepath {input_filepath} does not exist")
+    
+    path_to_output = output_filepath.rpartition("/")[0]
+    if path_to_output != "":
+        os.makedirs(path_to_output, exist_ok=True)
+    
+    if input_filepath[-4:] != ".csv" or output_filepath[-4:] != ".csv": 
+        return print("ERROR - filepaths must be valid csv files")
+        
     if input_filepath[-4:] != ".csv" or output_filepath[-4:] != ".csv": 
         return print("ERROR - filepaths must be valid csv files")
 
-    # importing with pandas assuming accurate headers and reasonable size of data
+    # importing with pandas assuming reasonable size of data
     raw_data = pd.read_csv(input_filepath)
-    if not set(["Account ID","First Name", "Created On"]).issubset(raw_data.columns.tolist()):
+    if not set( ["Account ID","First Name", "Created On"] ).issubset(raw_data.columns.tolist()):
         return print('ERROR - input csv must contain columns: "Account ID","First Name", "Created On"')
     
     df = data_cleaner(raw_data)
-    df = query_and_merge_all(df)
+    df = query_each_and_merge(df)
     df["Status Set On"] = pd.to_datetime(df["Status Set On"], errors='coerce') #drops seconds
     df.to_csv(output_filepath)
     
