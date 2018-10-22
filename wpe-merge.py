@@ -6,13 +6,13 @@ import sys
 # clean data, set types, remove nan account_ids, create columns needed for output
 def data_cleaner(raw_data):
     #pick columns
-    clean_data = raw_data[["Account ID","First Name", "Created On"]]
+    clean_data = raw_data
+    clean_data = pd.DataFrame(clean_data[["Account ID","First Name", "Created On"]])
 
     # might not necessarily want to assume the type of the Account ID, 
     # but definitely dont want .0s on the end for api query
     # coercing yields NaNs where errors occur which are filtered later
-    clean_data["Account ID"] = pd.to_numeric(clean_data["Account ID"], errors='coerce')\
-        .astype("int", errors='ignore')#, downcast="integer")
+    clean_data["Account ID"] = pd.to_numeric(clean_data["Account ID"], errors='coerce')
     # set as datetime to check validity and match "Status Set On" data
     clean_data["Created On"] = pd.to_datetime(clean_data["Created On"], errors='coerce')
 
@@ -88,15 +88,19 @@ def query_and_merge_all(df_in):
     return df_out
 
 def main(args):
+    print("start") #TODO: remove, checking start delay
     if len(args) != 3:
-        return print("invoke program as: wpe_merge <input_file.csv> <output_file.csv>")
+        return print("ERROR - invoke program as: wpe_merge <input_file.csv> <output_file.csv>")
     input_filepath = sys.argv[1]
     output_filepath = sys.argv[2]
     if input_filepath[-4:] != ".csv" or output_filepath[-4:] != ".csv": 
-        return print("filepaths must be valid csv files")
+        return print("ERROR - filepaths must be valid csv files")
 
     # importing with pandas assuming accurate headers and reasonable size of data
     raw_data = pd.read_csv(input_filepath)
+    if not set(["Account ID","First Name", "Created On"]).issubset(raw_data.columns.tolist()):
+        return print('ERROR - input csv must contain columns: "Account ID","First Name", "Created On"')
+    
     df = data_cleaner(raw_data)
     df = query_and_merge_all(df)
     df["Status Set On"] = pd.to_datetime(df["Status Set On"], errors='coerce') #drops seconds
