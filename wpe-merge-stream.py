@@ -5,6 +5,62 @@ from sys import argv
 import os
 import csv
 
+def handle_arguments(args):
+    """
+    check for validity of included arguments, create directory for output, 
+    determine whether or not to overwrite the base url and whether url is valid
+    args[0] meta data
+    args[1] input_filepath
+    args[2] output_filepath
+    args[3] url *optional
+    
+    few examples because exhaustive examples would rely on an specified
+    input file existing
+    example:
+    nontesting >> handle_arguments(["","test-data.csv", "out.csv"])
+    (True, 'test-data.csv', 'out.csv', 'http://interview.wpengine.io/v1/accounts', '')
+    nontesting >> handle_arguments(["","test-data.csv", "out.csv", "www.google.com"])
+    (True, 'test-data.csv', 'out.csv', 'www.google.com', '')
+    >>> handle_arguments(["",""])
+    (False, '', '', '', 'ERROR - invoke program as: wpe_merge <input_filepath.csv> <output_filepath.csv> <optional: base_url for queries>')
+
+    """
+    
+    valid = False
+    
+    if len(args) != 3 and len(args) != 4:
+        return False,"","","","ERROR - invoke program as: wpe_merge <input_filepath.csv> <output_filepath.csv> <optional: base_url for queries>"
+    input_filepath = args[1]
+    output_filepath = args[2]
+    
+    
+    if len(args) == 4:
+        base_url = args[3]
+        # / between base_url and account_id added in query
+        if base_url[-1] == "/": 
+            base_url=base_url[:-1]
+        #validate url
+        try:
+            test_status = get(base_url).status_code
+            if test_status != 200:
+                return False,"","","","ERROR - Included Url invalid, returns {test_status}"
+        except: #MissingSchema exception not found
+            return False,"","","","ERROR - Included Url invalid"
+    else:
+        base_url = "http://interview.wpengine.io/v1/accounts"
+    
+    if not os.path.exists(input_filepath):
+        return  False,"","","", f"ERROR - input filepath {input_filepath} does not exist"
+        
+    if input_filepath[-4:] != ".csv" or output_filepath[-4:] != ".csv" or input_filepath == output_filepath: 
+        return  False,"","","", "ERROR - filepaths must be unique valid csv files"
+    
+    path_to_output = output_filepath.rpartition("/")[0]
+    if path_to_output != "":
+        os.makedirs(path_to_output, exist_ok=True)
+    valid = True
+    return valid, input_filepath, output_filepath, base_url,""
+
 def verify_and_clean_input(input_dict):
     """
     given dictionary with ["Account ID", "Created On", "First Name"] keys,
@@ -36,6 +92,47 @@ def verify_and_clean_input(input_dict):
     output_dict["First Name"] = input_dict["First Name"]
         
     return True, output_dict, ""
+
+
+
+def query(account_id, base_url="http://interview.wpengine.io/v1/accounts"):
+    """
+    query base_url/account_id and determine if non-error json is returned
+    returns validity of response and a succ/fail message folded into the response
+    """
+    
+    data_is_valid = True
+    query_success = False
+    returned_dict = {}
+    message = ""
+    attempt_num = 0
+    
+    while (attempt_num < 3) and not query_success:
+        sleep(3**attempt_num-1) #backoff [0,2,8] seconds
+        attempt_num += 1
+        query_string = f"{base_url}/{account_id}"
+        request = get(query_string)
+
+        #successful query case
+        if request.status_code == 200:
+            returned_dict = request.json()
+            data_is_valid = True
+            query_success = True
+        else:
+            data_is_valid = False
+        
+        if request.status_code > 200:
+            try: # check parseable response
+                returned_dict = request.json()
+                message = f"Query - {query_string} - {returned_dict['detail']}"
+                query_success = True # but data not found
+            except ValueError:
+                message = f"Response not json parseable for query {query_string}"
+                query_success = False # requery
+    
+    returned_dict["message"] = message
+    returned_dict["valid"] = data_is_valid
+    return returned_dict
 
 def extend(input_dict, response_dict):
     """
@@ -89,103 +186,6 @@ def extend(input_dict, response_dict):
     else:
         message = response_dict["message"]
     return output_dict, message
-
-# query accounts/account_id and determine if non-error json is returned
-# returns validity of response and the response
-def query(account_id, base_url="http://interview.wpengine.io/v1/accounts"):
-    
-    data_is_valid = True
-    query_success = False
-    returned_dict = {}
-    message = ""
-    attempt_num = 0
-    
-    while (attempt_num < 3) and not query_success:
-        sleep(3**attempt_num-1) #backoff [0,2,8] seconds
-        attempt_num += 1
-        query_string = f"{base_url}/{account_id}"
-        request = get(query_string)
-
-        #successful query case
-        if request.status_code == 200:
-            returned_dict = request.json()
-            data_is_valid = True
-            query_success = True
-        else:
-            data_is_valid = False
-        
-        if request.status_code > 200:
-            try: # check parseable response
-                returned_dict = request.json()
-                message = f"Query - {query_string} - {returned_dict['detail']}"
-                query_success = True # but data not found
-            except ValueError:
-                message = f"Response not json parseable for query {query_string}"
-                query_success = False # requery
-    
-    returned_dict["message"] = message
-    returned_dict["valid"] = data_is_valid
-    return returned_dict
-
-def handle_arguments(args):
-    """
-    check for validity of included arguments, create directory for output, 
-    determine whether or not to overwrite the base url and whether url is valid
-    args[0] meta data
-    args[1] input_filepath
-    args[2] output_filepath
-    args[3] url *optional
-    
-    few examples because exhaustive examples would rely on an specified
-    input file existing
-    example:
-    nontesting >> handle_arguments(["","test-data.csv", "out.csv"])
-    (True, 'test-data.csv', 'out.csv', 'http://interview.wpengine.io/v1/accounts', '')
-    nontesting >> handle_arguments(["","test-data.csv", "out.csv", "www.google.com"])
-    (True, 'test-data.csv', 'out.csv', 'www.google.com', '')
-    >>> handle_arguments(["",""])
-    (False, '', '', '', 'ERROR - invoke program as: wpe_merge <input_filepath.csv> <output_filepath.csv> <optional: base_url for queries>')
-
-    """
-    
-    if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
-    
-    valid = False
-    
-    if len(args) != 3 and len(args) != 4:
-        return False,"","","","ERROR - invoke program as: wpe_merge <input_filepath.csv> <output_filepath.csv> <optional: base_url for queries>"
-    input_filepath = args[1]
-    output_filepath = args[2]
-    
-    
-    if len(args) == 4:
-        base_url = args[3]
-        # / between base_url and account_id added in query
-        if base_url[-1] == "/": 
-            base_url=base_url[:-1]
-        #validate url
-        try:
-            test_status = get(base_url).status_code
-            if test_status != 200:
-                return False,"","","","ERROR - Included Url invalid, returns {test_status}"
-        except: #MissingSchema exception not found
-            return False,"","","","ERROR - Included Url invalid"
-    else:
-        base_url = "http://interview.wpengine.io/v1/accounts"
-    
-    if not os.path.exists(input_filepath):
-        return  False,"","","", f"ERROR - input filepath {input_filepath} does not exist"
-        
-    if input_filepath[-4:] != ".csv" or output_filepath[-4:] != ".csv" or input_filepath == output_filepath: 
-        return  False,"","","", "ERROR - filepaths must be unique valid csv files"
-    
-    path_to_output = output_filepath.rpartition("/")[0]
-    if path_to_output != "":
-        os.makedirs(path_to_output, exist_ok=True)
-    valid = True
-    return valid, input_filepath, output_filepath, base_url,""
 
 def main(args):
     
@@ -241,4 +241,8 @@ def main(args):
             output_csv.close() 
         input_csv.close()
         
+if __name__ == "__main__":
+    from doctest import testmod
+    testmod()
+    
 main(argv)
