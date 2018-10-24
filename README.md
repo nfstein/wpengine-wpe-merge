@@ -19,7 +19,7 @@ Pull the information from the API for the Account ID
 Merge it with the CSV data to output into a new CSV with columns of Account ID, First Name, Created On, Status, and Status Set On
 The program must be invoked as follows (we have it scripted, so the format is important). Depending on your language choice, wpe_merge may need to be bash script (or a .bat) that actually invokes your code.
 
-wpe_merge \<input_file\> \<output_file\>
+wpe_merge \<input_file\> \<output_file\> \<optional base_url for queries\>
 
 For example:  wpe_merge data/input.csv output.csv
 You may use any open source / publicly available libraries for that language that you need, just include what they are. Feel free to send us any questions that you have or clarifications that you need to rd-interview@wpengine.com. We can evaluate your submission on macOS, Linux, or Windows.
