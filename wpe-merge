@@ -1,0 +1,4 @@
+echo "input_filepath = $1"
+echo "output_filepath = $2"
+echo "optional url = $3"
+python wpe-merge-stream.py $1 $2 $3
